@@ -8,5 +8,6 @@ edition = "2018"
 [dependencies]
 rand = "*"
 rand_distr = "*"
+rand_xorshift = "*"
 serde = {version = "*", features = ["derive"]}
 serde_json = "*"
