@@ -3,9 +3,9 @@ mod errors;
 
 use std::error::Error;
 use std::iter::Iterator;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ops::Not;
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, create_dir};
 use std::io::Write;
 
 use rand::prelude::*;
@@ -36,7 +36,6 @@ pub struct GenByteResult {
     bit: bool,
 }
 
-// TODO test this
 fn generate_bit(acc: GenByteResult, bit_change: (usize, bool)) -> GenByteResult {
     let val_bit: bool = if bit_change.1 {acc.bit} else {acc.bit.not()};
     let val: u8 = if val_bit {
@@ -47,13 +46,11 @@ fn generate_bit(acc: GenByteResult, bit_change: (usize, bool)) -> GenByteResult 
     GenByteResult {byte: val, bit: val_bit}
 }
 
-// TODO test this
 pub fn generate_byte(distr: & Bernoulli, rng: & mut impl Rng, init_bit: bool) -> GenByteResult {
     let init_val = GenByteResult {byte: 0u8, bit: init_bit};
     rng.sample_iter(distr).enumerate().take(8).fold(init_val, generate_bit)
 }
 
-// TODO test this
 pub fn generate_file_content(conf: & RngConfig) -> Result<Vec<u8>, Box<dyn Error>> {
     match conf {
 	RngConfig::CycleGen {
@@ -114,53 +111,177 @@ pub fn generate_file_content(conf: & RngConfig) -> Result<Vec<u8>, Box<dyn Error
     }
 }
 
-// TODO unite generate_file and generate_directory
-
 pub fn generate_file(conf: & ItemConfig, dir_path: & Path) -> Result<(), Box<dyn Error>> {
-    if let ItemConfig::FileConfig {name: name_conf, rand_gen: content_conf} = conf {
-	let file_name: String = generate_file_name(name_conf)?;
-	let mut generated_file: File = OpenOptions::new().write(true).create_new(true).open(dir_path.join(file_name))?;
-	let file_content: Vec<u8> = generate_file_content(content_conf)?;
-	generated_file.write_all(& file_content)?; // TODO Do buffered write
-	Ok(())
-    } else {
-	Err(Box::new(WrongConfigDataError)) // TODO raise another error
+    match conf {
+	ItemConfig::FileConfig {
+	    name: name_conf,
+	    rand_gen: content_conf
+	} => {
+	    let file_name: String = generate_file_name(name_conf)?;
+	    let mut generated_file: File = OpenOptions::new().write(true).create_new(true).open(dir_path.join(file_name))?;
+	    let file_content: Vec<u8> = generate_file_content(content_conf)?;
+	    generated_file.write_all(& file_content)?; // TODO Do buffered write
+	    Ok(())
+	},
+	ItemConfig::DirectoryConfig {
+	    name: name_conf,
+	    items: items_conf
+	} => {
+	    let file_name: String = generate_file_name(name_conf)?;
+	    let new_dir_path: PathBuf = dir_path.join(file_name);
+	    create_dir(& new_dir_path)?;
+	    for item in items_conf { // TODO paralell this (iterators?)
+		generate_file(item, & new_dir_path)?;
+	    }
+	    Ok(())
+	}
     }
 }
 
-pub fn generate_directory(conf: & ItemConfig, dir_path: & Path) -> Result<(), Box<dyn Error>> {
-    if let ItemConfig::DirectoryConfig {name: name_conf, items: items_conf} = conf {
-	// TODO
-	Ok(())
-    } else {
-	Err(Box::new(WrongConfigDataError)) // TODO raise another error
-    }
-}
-
+// TODO Move tests to separete directory
 #[cfg(test)]
 mod tests {
+    use rand::prelude::*;
+    use rand::distributions::Bernoulli;
+    use rand_xorshift::XorShiftRng;
+    use std::error::Error;
+    use std::fmt::{Display, Debug, Formatter};
+    use std::ops::Not;
+    use crate::config::*;
+    use crate::{generate_file_name, generate_bit, generate_byte, GenByteResult};
+
+    struct TestError {
+	message: String
+    }
+
+    impl TestError {
+	fn new(msg: String) -> TestError { // FIXME message type
+	    TestError{message: msg}
+	}
+    }
+
+    impl Display for TestError {
+	fn fmt(& self, f: & mut Formatter<'_>) -> std::fmt::Result {
+	    write!(f, "{}", self.message)
+	}
+    }
+
+    impl Debug for TestError {
+	fn fmt(& self, f: & mut Formatter<'_>) -> std::fmt::Result {
+	    write!(f, "{}", self.message)
+	}
+    }
+
+    impl Error for TestError {}
+    
     #[test]
-    fn test_generate_bit() {
-	unimplemented!()
+    fn test_generate_file_name_bittrain() -> Result<(), Box<dyn Error>> {
+	let conf: RngConfig = RngConfig::BitTrain {
+	    probability: 0.5,
+	    seed: None,
+	    length: 12
+	};
+	if generate_file_name(& conf).is_err() {
+	    Ok(())
+	} else {
+	    Err(Box::new(TestError::new("Created file name with bittrein generator".to_string())))
+	}
     }
 
     #[test]
-    fn test_generate_byte_1() {
-	unimplemented!()
+    fn test_generate_file_name_cycle() -> Result<(), Box<dyn Error>> {
+	let test_val: String = "teeeeeest".to_string();
+	let conf: RngConfig = RngConfig::CycleGen {
+	    value: test_val.clone().into_bytes(),
+	    length: test_val.len()
+	};
+	let test_test: String = generate_file_name(& conf)?;
+	if test_val == test_test {
+	    Ok(())
+	} else {
+	    Err(Box::new(TestError::new("Test values not equal".to_string())))
+	}
     }
 
     #[test]
-    fn test_generate_byte_2() {
-	unimplemented!()
+    fn test_generate_file_name_range() -> Result<(), Box<dyn Error>> {
+	let conf: RngConfig = RngConfig::RangeGen {
+	    value: vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]],
+	    seed: None,
+	    length: 12
+	};
+	if generate_file_name(& conf).is_err() {
+	    Ok(())
+	} else {
+	    Err(Box::new(TestError::new("Created file name with range generator".to_string())))
+	}
+    }
+
+    #[test]
+    fn test_generate_file_name_string() -> Result<(), Box<dyn Error>> {
+	let test_val: String = "teeeeeest".to_string();
+	let conf: RngConfig = RngConfig::StringGen {
+	    value: test_val.clone()
+	};
+	let test_test: String = generate_file_name(& conf)?;
+	if test_val == test_test {
+	    Ok(())
+	} else {
+	    Err(Box::new(TestError::new("Test values not equal".to_string())))
+	}
     }
     
     #[test]
-    fn test_generate_file() {
-	unimplemented!()
+    fn test_generate_bit() -> Result<(), Box<dyn Error>> {
+	let test_byte: u8 = 7;
+	let test_bit: bool = false;
+	let first_byte_shift: usize = 3;
+	let first_bit_change: bool = false;
+	let second_byte_shift: usize = 4;
+	let second_bit_change: bool = true;
+	let init_val: GenByteResult = GenByteResult {
+	    byte: test_byte.clone(),
+	    bit: test_bit.clone()
+	};
+	let intermediate_val: GenByteResult = generate_bit(init_val, (first_byte_shift, first_bit_change));
+	if (intermediate_val.byte != test_byte) || (intermediate_val.bit != test_bit) {
+	    return Err(Box::new(TestError::new("Wrong intermediate value".to_string())));
+	}
+	let final_val: GenByteResult = generate_bit(intermediate_val, (second_byte_shift, second_bit_change));
+	if (final_val.byte != (test_byte + (1 << second_byte_shift))) && (final_val.bit != test_bit.not()) {
+	    return Err(Box::new(TestError::new("Wrong final value".to_string())));
+	}
+	Ok(())
     }
 
     #[test]
-    fn test_generate_directory() {
+    fn test_generate_byte_1() -> Result<(), Box<dyn Error>> {
+	let distrib: Bernoulli = Bernoulli::new(1.0)?;
+	let rand_seed: [u8; 16] = [1; 16];
+	let mut rand_gen: XorShiftRng = XorShiftRng::from_seed(rand_seed);
+	let result = generate_byte(& distrib, & mut rand_gen, false);
+	if (result.byte != 170) || (result.bit != true) {
+	    Err(Box::new(TestError::new("Wrong value".to_string())))
+	} else {
+	    Ok(())
+	}
+    }
+
+    #[test]
+    fn test_generate_byte_0() -> Result<(), Box<dyn Error>> {
+	let distrib: Bernoulli = Bernoulli::new(0.0)?;
+	let rand_seed: [u8; 16] = [1; 16];
+	let mut rand_gen: XorShiftRng = XorShiftRng::from_seed(rand_seed);
+	let result = generate_byte(& distrib, & mut rand_gen, true);
+	if (result.byte != 255) || (result.bit != true) {
+	    Err(Box::new(TestError::new("Wrong value".to_string())))
+	} else {
+	    Ok(())
+	}
+    }
+    
+    #[test]
+    fn test_generate_file() -> Result<(), Box<dyn Error>> {
 	unimplemented!()
     }
 }

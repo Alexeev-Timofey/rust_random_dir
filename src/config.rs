@@ -56,7 +56,7 @@ mod test_config {
 		seed: tt,
 		length: _
 	    } = t {
-		assert_eq!(tt, vec![1, 2, 3, 4, 5, 6]);
+		assert_eq!(tt, Some(vec![1, 2, 3, 4, 5, 6]));
 		Ok(())
 	    } else {
 		Err(Box::new(WrongConfigDataError))
