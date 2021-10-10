@@ -46,7 +46,7 @@ mod test_config {
     
     #[test]
     fn test_parse_config() -> Result<(), Box<dyn Error>> {
-	let test: ItemConfig = serde_json::from_str("\"FileConfig\":{\"name\":{\"CycleGen\":{\"value\":[116,101,115,116,95,102,105,108,101,46,116,120,116],\"length\":13}},\"rand_gen\":{\"BitTrain\":{\"probability\":0.01,\"seed\":[1,2,3,4,5,6],\"length\":27}}}}")?;
+	let test: ItemConfig = serde_json::from_str("{\"FileConfig\":{\"name\":{\"CycleGen\":{\"value\":[116,101,115,116,95,102,105,108,101,46,116,120,116],\"length\":13}},\"rand_gen\":{\"BitTrain\":{\"probability\":0.01,\"seed\":[1,2,3,4,5,6],\"length\":27}}}}")?;
 	if let ItemConfig::FileConfig{
 	    name: _,
 	    rand_gen: t

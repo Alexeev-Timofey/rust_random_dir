@@ -4,7 +4,6 @@ mod errors;
 use std::error::Error;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
-use std::ops::Not;
 use std::fs::{File, OpenOptions, create_dir};
 use std::io::Write;
 
@@ -37,7 +36,7 @@ pub struct GenByteResult {
 }
 
 fn generate_bit(acc: GenByteResult, bit_change: (usize, bool)) -> GenByteResult {
-    let val_bit: bool = if bit_change.1 {acc.bit} else {acc.bit.not()};
+    let val_bit: bool = bit_change.1 ^ acc.bit;
     let val: u8 = if val_bit {
 	acc.byte + (1 << (7 - bit_change.0))
     } else {
@@ -233,24 +232,22 @@ mod tests {
     
     #[test]
     fn test_generate_bit() -> Result<(), Box<dyn Error>> {
-	let test_byte: u8 = 7;
+	let test_byte: u8 = (1 << 7) + (1 << 6) + (1 << 5);
 	let test_bit: bool = false;
-	let first_byte_shift: usize = 3;
+	let first_byte_shift: usize = 4;
 	let first_bit_change: bool = false;
-	let second_byte_shift: usize = 4;
+	let second_byte_shift: usize = 3;
 	let second_bit_change: bool = true;
 	let init_val: GenByteResult = GenByteResult {
-	    byte: test_byte.clone(),
-	    bit: test_bit.clone()
+	    byte: test_byte,
+	    bit: test_bit
 	};
 	let intermediate_val: GenByteResult = generate_bit(init_val, (first_byte_shift, first_bit_change));
-	if (intermediate_val.byte != test_byte) || (intermediate_val.bit != test_bit) {
-	    return Err(Box::new(TestError::new("Wrong intermediate value".to_string())));
-	}
+    	assert_eq!(intermediate_val.byte, test_byte);
+	assert_eq!(intermediate_val.bit, test_bit);
 	let final_val: GenByteResult = generate_bit(intermediate_val, (second_byte_shift, second_bit_change));
-	if (final_val.byte != (test_byte + (1 << second_byte_shift))) && (final_val.bit != test_bit.not()) {
-	    return Err(Box::new(TestError::new("Wrong final value".to_string())));
-	}
+	assert_eq!(final_val.byte, (test_byte + (1 << (7 - second_byte_shift))));
+	assert_eq!(final_val.bit, test_bit.not());
 	Ok(())
     }
 
@@ -260,11 +257,9 @@ mod tests {
 	let rand_seed: [u8; 16] = [1; 16];
 	let mut rand_gen: XorShiftRng = XorShiftRng::from_seed(rand_seed);
 	let result = generate_byte(& distrib, & mut rand_gen, false);
-	if (result.byte != 170) || (result.bit != true) {
-	    Err(Box::new(TestError::new("Wrong value".to_string())))
-	} else {
-	    Ok(())
-	}
+	assert_eq!(result.byte, 170);
+	assert!(result.bit.not());
+	Ok(())
     }
 
     #[test]
@@ -273,11 +268,9 @@ mod tests {
 	let rand_seed: [u8; 16] = [1; 16];
 	let mut rand_gen: XorShiftRng = XorShiftRng::from_seed(rand_seed);
 	let result = generate_byte(& distrib, & mut rand_gen, true);
-	if (result.byte != 255) || (result.bit != true) {
-	    Err(Box::new(TestError::new("Wrong value".to_string())))
-	} else {
-	    Ok(())
-	}
+	assert_eq!(result.byte, 255);
+	assert!(result.bit);
+	Ok(())
     }
     
     #[test]
