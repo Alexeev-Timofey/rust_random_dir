@@ -1,5 +1,6 @@
 mod config;
 mod errors;
+mod extern_api;
 
 use std::error::Error;
 use std::iter::Iterator;
@@ -271,10 +272,5 @@ mod tests {
 	assert_eq!(result.byte, 255);
 	assert!(result.bit);
 	Ok(())
-    }
-    
-    #[test]
-    fn test_generate_file() -> Result<(), Box<dyn Error>> {
-	unimplemented!()
     }
 }
